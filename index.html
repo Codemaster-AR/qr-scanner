@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced QR Scanner Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap');
+        
+        :root {
+            --accent: #0ea5e9;
+            --accent-glow: rgba(14, 165, 233, 0.3);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #020617;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.05) 0px, transparent 50%);
+            color: #f1f5f9;
+            overflow-x: hidden;
+        }
+
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+        }
+
+        .neon-border {
+            position: relative;
+        }
+        .neon-border::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            background: linear-gradient(45deg, var(--accent), transparent, var(--accent));
+            z-index: -1;
+            border-radius: inherit;
+            opacity: 0.3;
+        }
+
+        .scanner-box {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scanner-line {
+            height: 3px;
+            background: var(--accent);
+            box-shadow: 0 0 15px var(--accent), 0 0 30px var(--accent);
+            position: absolute;
+            width: 100%;
+            top: 0;
+            z-index: 20;
+            animation: scan-move 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        @keyframes scan-move {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--accent);
+            z-index: 30;
+        }
+        .c-tl { top: 20px; left: 20px; border-right: 0; border-bottom: 0; }
+        .c-tr { top: 20px; right: 20px; border-left: 0; border-bottom: 0; }
+        .c-bl { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
+        .c-br { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex items-center justify-center">
+
+    <div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Sidebar / Navigation -->
+        <div class="lg:col-span-1 flex lg:flex-col gap-4 justify-center lg:justify-start">
+             <div class="glass-panel p-3 rounded-2xl flex lg:flex-col gap-4">
+                <button onclick="switchTab('camera')" id="nav-camera" class="p-3 rounded-xl transition-all bg-sky-500/20 text-sky-400 border border-sky-500/30 shadow-[0_0_15px_rgba(14,165,233,0.2)]">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </button>
+                <button onclick="switchTab('upload')" id="nav-upload" class="p-3 rounded-xl transition-all text-slate-400 hover:text-white hover:bg-slate-800">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                </button>
+                <button onclick="toggleSettings()" class="p-3 rounded-xl transition-all text-slate-400 hover:text-white hover:bg-slate-800">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </button>
+             </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="lg:col-span-7 space-y-6">
+            
+            <div id="camera-section" class="glass-panel rounded-3xl overflow-hidden relative">
+                <!-- Header Info -->
+                <div class="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-40 pointer-events-none">
+                    <div>
+                        <h2 class="text-white font-bold text-xl tracking-tight">VIRTUAL SCANNER</h2>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span id="status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                            <span id="status-text" class="text-[10px] uppercase tracking-widest text-slate-400 font-mono">System Offline</span>
+                        </div>
+                    </div>
+                    <div class="pointer-events-auto">
+                        <select id="camera-select" class="bg-slate-900/80 border border-slate-700 text-xs text-white rounded-lg px-3 py-1.5 outline-none focus:border-sky-500 transition-all"></select>
+                    </div>
+                </div>
+
+                <!-- Media Area -->
+                <div class="aspect-[4/3] bg-black relative scanner-box">
+                    <video id="video" class="w-full h-full object-cover opacity-60 transition-opacity duration-700 hidden" playsinline></video>
+                    <canvas id="canvas" class="hidden"></canvas>
+                    
+                    <!-- Scan Decoration -->
+                    <div id="scanner-ui" class="hidden absolute inset-0">
+                        <div class="scanner-line"></div>
+                        <div class="corner c-tl"></div><div class="corner c-tr"></div>
+                        <div class="corner c-bl"></div><div class="corner c-br"></div>
+                        <!-- Grid Overlay -->
+                        <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 30px 30px;"></div>
+                    </div>
+
+                    <!-- Idle View -->
+                    <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
+                        <div class="w-24 h-24 rounded-full border border-slate-800 flex items-center justify-center mb-6 relative">
+                            <div class="absolute inset-0 rounded-full border border-sky-500/20 animate-ping"></div>
+                            <svg class="w-10 h-10 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15l-2-2m0 0l-2 2m2-2V9m0 6a3 3 0 100-6 3 3 0 000 6z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <h3 class="text-white text-lg font-semibold mb-2">Ready for Neural Input</h3>
+                        <p class="text-slate-500 text-sm max-w-xs mb-8">Grant camera permissions to begin real-time data extraction and processing.</p>
+                        <button onclick="startCamera()" class="px-8 py-3 bg-sky-500 hover:bg-sky-400 text-white rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg shadow-sky-500/20 active:scale-95">
+                            INITIALIZE CAMERA
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Footer Stats -->
+                <div class="bg-slate-900/50 p-4 border-t border-white/5 flex justify-between items-center text-[10px] font-mono text-slate-500">
+                    <div class="flex gap-4">
+                        <span>FPS: <span id="fps-counter" class="text-sky-400">0</span></span>
+                        <span>LATENCY: <span class="text-sky-400">12ms</span></span>
+                    </div>
+                    <div>SECURE SESSION V.4.2</div>
+                </div>
+            </div>
+
+            <div id="upload-section" class="hidden">
+                <div id="drop-zone" class="glass-panel rounded-3xl border-2 border-dashed border-slate-800 p-20 text-center cursor-pointer transition-all hover:border-sky-500/50 hover:bg-sky-500/5 group">
+                    <input type="file" id="file-input" class="hidden" accept="image/*">
+                    <div class="w-20 h-20 mx-auto bg-slate-800/50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-sky-500/20 transition-colors">
+                        <svg class="w-10 h-10 text-slate-500 group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Manual Data Ingest</h3>
+                    <p class="text-slate-500">Drop static image or click to browse local storage</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Console -->
+        <div class="lg:col-span-4 space-y-6">
+            <!-- Latest Extraction -->
+            <div class="glass-panel rounded-3xl p-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-3">
+                    <div class="bg-sky-500/10 text-sky-400 text-[10px] px-2 py-1 rounded-md border border-sky-500/20 font-bold uppercase">Active Output</div>
+                </div>
+                <h4 class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Extraction Console</h4>
+                
+                <div id="output-view" class="space-y-6">
+                    <div id="no-result" class="py-12 text-center">
+                        <div class="inline-block p-4 rounded-full bg-slate-800/50 mb-4">
+                            <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <p class="text-slate-500 text-sm italic">Listening for data stream...</p>
+                    </div>
+
+                    <div id="has-result" class="hidden space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div class="bg-black/40 border border-slate-800 rounded-2xl p-4 relative">
+                            <div class="text-[10px] text-sky-500 font-mono mb-2 uppercase tracking-tight">Decoded String:</div>
+                            <p id="result-text" class="text-white font-mono text-sm break-all leading-relaxed"></p>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="copyCurrent()" class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-xs py-3 rounded-xl transition-all">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                                Copy
+                            </button>
+                            <a id="open-btn" target="_blank" class="flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-400 text-white text-xs py-3 rounded-xl transition-all font-bold">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                Open
+                            </a>
+                        </div>
+                        <button onclick="downloadScan()" class="w-full bg-slate-800/50 hover:bg-slate-800 text-slate-300 text-[10px] uppercase font-bold py-2 rounded-lg transition-all border border-slate-700">
+                            Download Log (.txt)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database Log -->
+            <div class="glass-panel rounded-3xl p-6 flex flex-col h-[380px]">
+                <div class="flex items-center justify-between mb-6">
+                    <h4 class="text-slate-400 text-xs font-bold uppercase tracking-widest">Database Log</h4>
+                    <button onclick="clearHistory()" class="text-[10px] text-red-500/70 hover:text-red-400 uppercase font-bold">Wipe Cache</button>
+                </div>
+                <div id="history-list" class="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                    <!-- History injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-md" onclick="toggleSettings()"></div>
+        <div class="glass-panel w-full max-w-md rounded-3xl p-8 relative animate-in zoom-in-95 duration-200">
+            <h2 class="text-2xl font-bold text-white mb-6">Scanner Config</h2>
+            <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-white font-medium">Inversion Ingest</div>
+                        <div class="text-xs text-slate-500">Scan negative (inverted) QR codes</div>
+                    </div>
+                    <button id="toggle-inversion" class="w-12 h-6 bg-slate-800 rounded-full relative transition-colors"><div class="absolute top-1 left-1 w-4 h-4 bg-slate-400 rounded-full transition-all"></div></button>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-white font-medium">Auto-Vibrate</div>
+                        <div class="text-xs text-slate-500">Haptic feedback on successful decode</div>
+                    </div>
+                    <button id="toggle-vibrate" class="w-12 h-6 bg-sky-500 rounded-full relative transition-colors"><div class="absolute top-1 right-1 w-4 h-4 bg-white rounded-full transition-all"></div></button>
+                </div>
+                <div class="pt-6 border-t border-white/5">
+                    <button onclick="toggleSettings()" class="w-full py-3 bg-slate-800 text-white rounded-xl font-bold">Close Portal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-sky-500 text-white px-6 py-3 rounded-2xl shadow-2xl shadow-sky-500/40 flex items-center gap-3 font-bold text-sm">
+            <span id="toast-msg"></span>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const canvas = canvasElement.getContext('2d', { willReadFrequently: true });
+        const historyList = document.getElementById('history-list');
+        const cameraSelect = document.getElementById('camera-select');
+        const fpsCounter = document.getElementById('fps-counter');
+
+        let scanning = false;
+        let lastFrameTime = performance.now();
+        let config = { inversion: false, vibrate: true };
+        let history = JSON.parse(localStorage.getItem('qr_pro_history') || '[]');
+
+        // Initialize
+        updateHistoryUI();
+        enumerateCameras();
+
+        async function enumerateCameras() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            cameraSelect.innerHTML = videoDevices.map(d => `<option value="${d.deviceId}">${d.label || 'Camera ' + d.deviceId.slice(0,4)}</option>`).join('');
+            cameraSelect.onchange = () => { if (scanning) { stopCamera(); startCamera(); } };
+        }
+
+        function switchTab(tab) {
+            const sections = ['camera', 'upload'];
+            sections.forEach(s => {
+                document.getElementById(`${s}-section`).classList.toggle('hidden', s !== tab);
+                const btn = document.getElementById(`nav-${s}`);
+                if (s === tab) {
+                    btn.classList.add('bg-sky-500/20', 'text-sky-400', 'border-sky-500/30', 'shadow-[0_0_15px_rgba(14,165,233,0.2)]');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('bg-sky-500/20', 'text-sky-400', 'border-sky-500/30', 'shadow-[0_0_15px_rgba(14,165,233,0.2)]');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+            if (tab !== 'camera') stopCamera();
+        }
+
+        async function startCamera() {
+            try {
+                const constraints = {
+                    video: { 
+                        deviceId: cameraSelect.value ? { exact: cameraSelect.value } : undefined,
+                        facingMode: "environment" 
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                video.classList.remove('hidden');
+                video.style.opacity = '1';
+                video.play();
+                
+                scanning = true;
+                document.getElementById('camera-placeholder').classList.add('hidden');
+                document.getElementById('scanner-ui').classList.remove('hidden');
+                document.getElementById('status-dot').className = "w-2 h-2 rounded-full bg-sky-500 animate-pulse";
+                document.getElementById('status-text').innerText = "System Live";
+                document.getElementById('status-text').classList.add('text-sky-400');
+                
+                requestAnimationFrame(tick);
+            } catch (err) {
+                showToast("Uplink failed: " + err.message);
+            }
+        }
+
+        function stopCamera() {
+            if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+            scanning = false;
+            video.classList.add('hidden');
+            document.getElementById('camera-placeholder').classList.remove('hidden');
+            document.getElementById('scanner-ui').classList.add('hidden');
+            document.getElementById('status-dot').className = "w-2 h-2 rounded-full bg-slate-500";
+            document.getElementById('status-text').innerText = "System Offline";
+            document.getElementById('status-text').classList.remove('text-sky-400');
+        }
+
+        function tick() {
+            if (!scanning) return;
+
+            const now = performance.now();
+            fpsCounter.innerText = Math.round(1000 / (now - lastFrameTime));
+            lastFrameTime = now;
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvasElement.height = video.videoHeight;
+                canvasElement.width = video.videoWidth;
+                canvas.drawImage(video, 0, 0);
+                
+                const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: config.inversion ? "attemptBoth" : "dontInvert",
+                });
+
+                if (code && code.data) {
+                    handleScanSuccess(code.data);
+                    scanning = false;
+                    setTimeout(() => { if (video.srcObject) { scanning = true; requestAnimationFrame(tick); } }, 2000);
+                    return;
+                }
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // File handling
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        dropZone.onclick = () => fileInput.click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('bg-sky-500/10'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('bg-sky-500/10');
+        dropZone.ondrop = (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); };
+        fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        function handleFile(file) {
+            if (!file || !file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    canvasElement.width = img.width;
+                    canvasElement.height = img.height;
+                    canvas.drawImage(img, 0, 0);
+                    const code = jsQR(canvas.getImageData(0,0,img.width,img.height).data, img.width, img.height);
+                    if (code) handleScanSuccess(code.data);
+                    else showToast("No pattern detected.");
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleScanSuccess(data) {
+            document.getElementById('no-result').classList.add('hidden');
+            document.getElementById('has-result').classList.remove('hidden');
+            document.getElementById('result-text').innerText = data;
+            
+            const openBtn = document.getElementById('open-btn');
+            if (data.match(/^https?:\/\//)) {
+                openBtn.href = data;
+                openBtn.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                openBtn.classList.add('opacity-50', 'pointer-events-none');
+            }
+
+            if (!history.some(h => h.content === data)) {
+                history.unshift({ content: data, time: new Date().toLocaleTimeString(), date: new Date().toLocaleDateString() });
+                if (history.length > 50) history.pop();
+                localStorage.setItem('qr_pro_history', JSON.stringify(history));
+                updateHistoryUI();
+            }
+
+            if (config.vibrate && 'vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+            showToast("DATA DECODED");
+        }
+
+        function updateHistoryUI() {
+            if (!history.length) {
+                historyList.innerHTML = `<div class="text-slate-600 text-xs text-center py-10 italic">No logs found in secure storage</div>`;
+                return;
+            }
+            historyList.innerHTML = history.map(h => `
+                <div class="bg-white/5 border border-white/5 p-4 rounded-2xl group hover:border-sky-500/40 transition-all cursor-pointer" onclick="handleScanSuccess('${h.content.replace(/'/g, "\\'")}')">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[9px] font-mono text-sky-500/70 font-bold uppercase tracking-widest">${h.date} | ${h.time}</span>
+                        <div class="w-1.5 h-1.5 rounded-full bg-sky-500 shadow-[0_0_5px_#0ea5e9]"></div>
+                    </div>
+                    <p class="text-xs text-slate-300 font-mono truncate">${h.content}</p>
+                </div>
+            `).join('');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            t.classList.remove('opacity-0', 'translate-y-4');
+            t.classList.add('opacity-1', '-translate-y-0');
+            setTimeout(() => {
+                t.classList.add('opacity-0', 'translate-y-4');
+                t.classList.remove('opacity-1', '-translate-y-0');
+            }, 2500);
+        }
+
+        function copyCurrent() {
+            const txt = document.getElementById('result-text').innerText;
+            const el = document.createElement('textarea');
+            el.value = txt; document.body.appendChild(el); el.select();
+            document.execCommand('copy'); document.body.removeChild(el);
+            showToast("LOG COPIED");
+        }
+
+        function downloadScan() {
+            const txt = document.getElementById('result-text').innerText;
+            const blob = new Blob([`QR SCAN LOG\nTime: ${new Date()}\nContent: ${txt}`], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `scan-log-${Date.now()}.txt`; a.click();
+        }
+
+        function toggleSettings() {
+            document.getElementById('settings-modal').classList.toggle('hidden');
+        }
+
+        function clearHistory() {
+            if (confirm("Execute wipe of all stored logs?")) {
+                history = [];
+                localStorage.setItem('qr_pro_history', '[]');
+                updateHistoryUI();
+                showToast("CACHE PURGED");
+            }
+        }
+
+        // Toggle Buttons Logic
+        document.getElementById('toggle-vibrate').onclick = function() {
+            config.vibrate = !config.vibrate;
+            this.className = config.vibrate ? "w-12 h-6 bg-sky-500 rounded-full relative transition-colors" : "w-12 h-6 bg-slate-800 rounded-full relative transition-colors";
+            this.children[0].className = config.vibrate ? "absolute top-1 right-1 w-4 h-4 bg-white rounded-full transition-all" : "absolute top-1 left-1 w-4 h-4 bg-slate-400 rounded-full transition-all";
+        };
+        
+        document.getElementById('toggle-inversion').onclick = function() {
+            config.inversion = !config.inversion;
+            this.className = config.inversion ? "w-12 h-6 bg-sky-500 rounded-full relative transition-colors" : "w-12 h-6 bg-slate-800 rounded-full relative transition-colors";
+            this.children[0].className = config.inversion ? "absolute top-1 right-1 w-4 h-4 bg-white rounded-full transition-all" : "absolute top-1 left-1 w-4 h-4 bg-slate-400 rounded-full transition-all";
+        };
+
+    </script>
+</body>
+</html>
